@@ -80,6 +80,13 @@
   .form .hp { position:absolute; left:-9999px; }
   .hint { position:fixed; right:16px; bottom:16px; background:var(--card); border:1px solid var(--line); border-radius:999px;
     padding:8px 14px; font-size:13px; color:var(--dim); }
+  .touch .hint { display:none; }
+  @media (max-height:500px){
+    .legend { padding:8px 12px; max-width:300px; } .legend h1 { font-size:16px; margin:0 0 4px; } .legend .sub { display:none; }
+    .legend ul { gap:2px; font-size:13px; } .legend .power { margin-top:6px; font-size:11.5px; }
+    .legend .lbtns { margin-top:8px; } .legend .btn { padding:7px 8px; font-size:12.5px; }
+    .tip { max-height:calc(100vh - 16px); overflow:auto; }
+  }
   @media (max-width:700px){
     .legend { padding:10px 12px; left:10px; right:10px; top:10px; max-width:none; } .legend h1 { font-size:17px; margin:0 0 6px; }
     .legend .sub { display:none; } .legend ul { grid-template-columns:repeat(3,auto); gap:4px 12px; font-size:13px; }
