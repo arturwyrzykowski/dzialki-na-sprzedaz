@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Działki na sprzedaż</title>
+<style>
+  :root { --ink:#fff; --dim:rgba(255,255,255,.72); --card:rgba(12,16,22,.86); --line:rgba(255,255,255,.16);
+          --free:#3ddc84; --res:#ffd43b; --sold:#ff5a36; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#0b0f14; color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; overflow:hidden; }
+  svg#mapa { position:fixed; inset:0; width:100vw; height:100vh; display:block; touch-action:manipulation; }
+  .p { cursor:pointer; stroke:transparent; stroke-width:2; transition:fill .18s, stroke .18s; vector-effect:non-scaling-stroke; }
+  .p.dostepna   { fill:rgba(255,255,255,0); }
+  .p.dostepna:hover, .p.dostepna.on { fill:rgba(255,255,255,.28); stroke:#fff; stroke-width:3; }
+  .p.rezerwacja { fill:rgba(255,222,40,.55); }
+  .p.rezerwacja:hover, .p.rezerwacja.on { fill:rgba(255,222,40,.75); stroke:#fff; stroke-width:3; }
+  .p.sprzedana  { fill:rgba(225,75,30,.58); }
+  .p.sprzedana:hover, .p.sprzedana.on { fill:rgba(225,75,30,.78); stroke:#fff; stroke-width:3; }
+  .p:focus { outline:none; }
+  .road { fill:transparent; cursor:default; }
+  .road:hover { fill:rgba(0,0,0,.18); }
+  .nr { font:700 15px/1 -apple-system,Segoe UI,Roboto,sans-serif; fill:#fff; pointer-events:none;
+        paint-order:stroke; stroke:rgba(0,0,0,.55); stroke-width:3px; text-anchor:middle; dominant-baseline:central; }
+
+  .legend { position:fixed; left:16px; top:16px; background:var(--card); border:1px solid var(--line);
+    border-radius:14px; padding:14px 16px; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); max-width:min(320px,calc(100vw - 32px)); }
+  .legend h1 { margin:0 0 4px; font-size:20px; font-weight:700; letter-spacing:.01em; }
+  .legend .sub { margin:0 0 10px; color:var(--dim); font-size:13px; }
+  .legend ul { list-style:none; margin:0; padding:0; display:grid; gap:6px; font-size:14px; }
+  .legend li { display:flex; align-items:center; gap:8px; }
+  .sw { width:14px; height:14px; border-radius:4px; flex:0 0 auto; border:1px solid rgba(255,255,255,.5); }
+  .sw.free { background:rgba(255,255,255,.12); } .sw.res { background:var(--res); } .sw.sold { background:var(--sold); }
+  .legend b { margin-left:auto; font-variant-numeric:tabular-nums; }
+
+  .tip { position:fixed; z-index:5; pointer-events:none; min-width:220px; max-width:300px;
+    background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    opacity:0; transform:translateY(4px); transition:opacity .12s, transform .12s; }
+  .tip.show { opacity:1; transform:none; }
+  .tip h2 { margin:0 0 8px; font-size:17px; display:flex; align-items:center; gap:8px; }
+  .tip .badge { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:3px 7px; border-radius:999px; }
+  .badge.dostepna { background:rgba(61,220,132,.18); color:var(--free); }
+  .badge.rezerwacja { background:rgba(255,212,59,.2); color:var(--res); }
+  .badge.sprzedana { background:rgba(255,90,54,.2); color:var(--sold); }
+  .tip dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:14px; }
+  .tip dt { color:var(--dim); } .tip dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
+  .tip .price { margin-top:10px; padding-top:9px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:baseline; }
+  .tip .price span { color:var(--dim); font-size:13px; } .tip .price strong { font-size:20px; }
+  .tip .big { font-size:26px; font-weight:800; letter-spacing:.04em; text-align:center; padding:6px 0 2px; }
+  .tip .big.sprzedana { color:var(--sold); } .tip .big.rezerwacja { color:var(--res); }
+  .tip .ask { display:none; margin-top:12px; width:100%; }
+  .touch .tip { pointer-events:auto; } .touch .tip .ask { display:block; } .touch .tip .askhint { display:none; }
+  .tip .askhint { margin-top:9px; font-size:12px; color:var(--dim); text-align:center; }
+  button.ask, .btn { font:600 15px/1 inherit; font-family:inherit; color:#06240f; background:var(--free); border:0; border-radius:10px;
+    padding:12px 14px; cursor:pointer; }
+  .btn.ghost { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .legend .btn { font-size:14px; padding:10px 12px; }
+  .legend .lbtns { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .legend .power { margin:12px 0 0; font-size:13px; line-height:1.4; color:#ffe08a; }
+  .form.wz dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:14px; }
+  .form.wz dt { color:var(--dim); } .form.wz dd { margin:0; }
+  .form.wz h4 { margin:16px 0 8px; font-size:15px; }
+  .modal { position:fixed; inset:0; z-index:10; display:none; align-items:center; justify-content:center; padding:16px;
+    background:rgba(0,0,0,.55); }
+  .modal.open { display:flex; }
+  .form { width:min(440px,100%); max-height:calc(100vh - 32px); overflow:auto; background:#111821; border:1px solid var(--line);
+    border-radius:16px; padding:18px; box-shadow:0 20px 50px rgba(0,0,0,.5); }
+  .form h3 { margin:0 0 4px; font-size:19px; } .form .sum { margin:0 0 14px; color:var(--dim); font-size:13px; line-height:1.45; }
+  .form label { display:block; font-size:13px; color:var(--dim); margin:10px 0 4px; }
+  .form input, .form textarea { width:100%; font:inherit; font-size:15px; color:var(--ink); background:#0b1017;
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .form input:focus, .form textarea:focus { outline:2px solid var(--free); outline-offset:0; border-color:transparent; }
+  .form textarea { min-height:90px; resize:vertical; }
+  .form .chk { display:flex; gap:9px; align-items:flex-start; font-size:12px; line-height:1.4; color:var(--dim); margin-top:12px; }
+  .form .chk input { width:auto; margin-top:2px; }
+  .form .row { display:flex; gap:10px; margin-top:16px; } .form .row .btn { flex:1; }
+  .form .msg { margin-top:12px; font-size:14px; } .form .msg.ok { color:var(--free); } .form .msg.err { color:var(--sold); }
+  .form .hp { position:absolute; left:-9999px; }
+  .hint { position:fixed; right:16px; bottom:16px; background:var(--card); border:1px solid var(--line); border-radius:999px;
+    padding:8px 14px; font-size:13px; color:var(--dim); }
+  @media (max-width:700px){
+    .legend { padding:10px 12px; left:10px; right:10px; top:10px; max-width:none; } .legend h1 { font-size:17px; margin:0 0 6px; }
+    .legend .sub { display:none; } .legend ul { grid-template-columns:repeat(3,auto); gap:4px 12px; font-size:13px; }
+    .legend li b { margin-left:4px; } .legend .power { margin-top:8px; font-size:12px; }
+    .legend .lbtns { margin-top:8px; } .legend .btn { padding:8px 10px; font-size:13px; }
+    .tip { left:12px !important; right:12px; top:auto !important; bottom:12px; max-width:none; }
+    .hint { display:none; }
+  }
+</style>
+</head>
+<body>
+<svg id="mapa" viewBox="0 0 2000 1125" preserveAspectRatio="xMaxYMid slice" aria-label="Plan działek na zdjęciu z drona">
+  <image href="zdjecie.jpg" x="0" y="0" width="2000" height="1125" preserveAspectRatio="none"/>
+  <polygon class="road" points="932.1,402.4 955.8,405.9 1522.1,976 1416.9,935.6"><title>Droga wewnętrzna</title></polygon>
+  <g id="dzialki"></g>
+</svg>
+
+<div class="legend">
+  <h1>Działki na sprzedaż</h1>
+  <p class="sub">Najedź na działkę, aby zobaczyć szczegóły.</p>
+  <ul>
+    <li><span class="sw free"></span>Dostępne <b id="cFree"></b></li>
+    <li><span class="sw res"></span>Rezerwacja <b id="cRes"></b></li>
+    <li><span class="sw sold"></span>Sprzedane <b id="cSold"></b></li>
+  </ul>
+  <p class="power">⚡ Działki mają oświadczenie zakładu energetycznego o możliwości przyłączenia prądu.</p>
+  <div class="lbtns"><button type="button" class="btn ghost" id="wzBtn">Warunki zabudowy</button><button type="button" class="btn" id="askAll">Wyślij zapytanie</button></div>
+</div>
+<div class="modal" id="wzModal" role="dialog" aria-modal="true" aria-labelledby="wzTitle">
+  <div class="form wz">
+    <h3 id="wzTitle">Warunki zabudowy</h3>
+    <p class="sum">Ostateczna decyzja o warunkach zabudowy z 2026 r.</p>
+    <dl>
+      <dt>Przeznaczenie</dt><dd>zabudowa mieszkaniowa jednorodzinna</dd>
+      <dt>Linia zabudowy</dt><dd>6 m od drogi gminnej, 5 m od drogi wewnętrznej</dd>
+      <dt>Powierzchnia zabudowy</dt><dd>do 40% działki</dd>
+      <dt>Powierzchnia biologicznie czynna</dt><dd>min. 50% działki</dd>
+      <dt>Intensywność zabudowy</dt><dd>od 0,07 do 0,45</dd>
+      <dt>Szerokość elewacji frontowej</dt><dd>8 m (± 20%)</dd>
+      <dt>Dach</dt><dd>dwuspadowy lub wielospadowy, nachylenie 10–45°</dd>
+      <dt>Wysokość do kalenicy</dt><dd>do 9 m</dd>
+      <dt>Parkowanie</dt><dd>min. 2 miejsca na działce</dd>
+    </dl>
+    <h4>Media i dojazd</h4>
+    <dl>
+      <dt>Dojazd</dt><dd>z drogi publicznej, przez drogę wewnętrzną</dd>
+      <dt>Prąd</dt><dd>z sieci; oświadczenie zakładu energetycznego o możliwości przyłączenia</dd>
+      <dt>Woda</dt><dd>własna studnia, docelowo wodociąg</dd>
+      <dt>Ścieki</dt><dd>szambo lub przydomowa oczyszczalnia</dd>
+    </dl>
+    <div class="row"><button type="button" class="btn ghost" id="wzClose">Zamknij</button><button type="button" class="btn" id="wzAsk">Zapytaj o działkę</button></div>
+  </div>
+</div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="fTitle">
+  <form class="form" id="form" novalidate>
+    <h3 id="fTitle">Zapytanie o działkę</h3>
+    <p class="sum" id="fSum"></p>
+    <input type="text" name="_honey" class="hp" tabindex="-1" autocomplete="off">
+    <label for="fName">Imię i nazwisko *</label><input id="fName" name="imie" required autocomplete="name">
+    <label for="fTel">Telefon *</label><input id="fTel" name="telefon" type="tel" required autocomplete="tel">
+    <label for="fMail">E-mail</label><input id="fMail" name="email" type="email" autocomplete="email">
+    <label for="fMsg">Wiadomość</label><textarea id="fMsg" name="wiadomosc"></textarea>
+    <label class="chk"><input type="checkbox" id="fZgoda" required> <span>Wyrażam zgodę na kontakt w sprawie działki i przetwarzanie podanych danych w tym celu. *</span></label>
+    <div class="row"><button type="button" class="btn ghost" id="fCancel">Anuluj</button><button type="submit" class="btn" id="fSend">Wyślij</button></div>
+    <div class="msg" id="fOut" role="status"></div>
+  </form>
+</div>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+<div class="hint">Najedź kursorem na działkę · kliknij, aby zapytać</div>
+
+<script>
+/* ================== DANE DZIAŁEK — tu wpisuj parametry ==================
+   status: "dostepna" | "rezerwacja" | "sprzedana"
+   powierzchnia, wymiary, cena: dowolny tekst, np. "1 200 m²", "30 × 40 m", "120 000 zł"
+   inne: dodatkowe wiersze, np. [["Media", "prąd w drodze"], ["Dojazd", "droga gminna"]]
+   pts: narożniki kafelka na zdjęciu — NIE ZMIENIAĆ
+   ========================================================================= */
+const DZIALKI = [
+  { nr:  1, status: "dostepna", powierzchnia: "1 186 m² (0,1186 ha)", wymiary: "31,2 × 38,0 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "789.4,381.4 932.1,402.4 959.7,432.8 806.8,409.8" },
+  { nr:  2, status: "dostepna", powierzchnia: "1 000 m² (0,1000 ha)", wymiary: "26,3 × 38,0 m", cena: "68 000 zł", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "806.8,409.8 959.7,432.8 995.9,472.6 831.2,449.8" },
+  { nr:  3, status: "dostepna", powierzchnia: "1 000 m² (0,1000 ha)", wymiary: "26,3 × 38,0 m", cena: "68 000 zł", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "831.2,449.8 995.9,472.6 1040.2,521.3 849.9,480.6" },
+  { nr:  4, status: "dostepna", powierzchnia: "1 000 m² (0,1000 ha)", wymiary: "26,3 × 38,0 m", cena: "68 000 zł", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "849.9,480.6 1040.2,521.3 1083.1,568.5 880.8,531.2" },
+  { nr:  5, status: "dostepna", powierzchnia: "1 000 m² (0,1000 ha)", wymiary: "26,3 × 38,0 m", cena: "68 000 zł", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "880.8,531.2 1083.1,568.5 1133.3,623.7 911.1,580.9" },
+  { nr:  6, status: "rezerwacja", powierzchnia: "1 200 m² (0,1200 ha)", wymiary: "31,6 × 38,0 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "911.1,580.9 1133.3,623.7 1220.5,719.7 966.6,671.9" },
+  { nr:  7, status: "dostepna", powierzchnia: "1 268 m² (0,1268 ha)", wymiary: "kształt nieregularny, boki 52,5 / 38,0 / 14,2 / 54,0 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "966.6,671.9 1220.5,719.7 1416.9,935.6 1023.6,765.4" },
+  { nr:  8, status: "sprzedana", powierzchnia: "1 186 m² (0,1186 ha)", wymiary: "31,2 × 38,0 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "955.8,405.9 1072.9,423.1 1122,457.2 985.6,435.8" },
+  { nr:  9, status: "sprzedana", powierzchnia: "1 000 m² (0,1000 ha)", wymiary: "26,3 × 38,0 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "985.6,435.8 1122,457.2 1186.3,501.9 1028.7,479.2" },
+  { nr: 10, status: "dostepna", powierzchnia: "1 000 m² (0,1000 ha)", wymiary: "26,3 × 38,0 m", cena: "75 000 zł", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "1028.7,479.2 1186.3,501.9 1259.4,552.8 1068.6,519.4" },
+  { nr: 11, status: "dostepna", powierzchnia: "1 000 m² (0,1000 ha)", wymiary: "26,3 × 38,0 m", cena: "75 000 zł", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "1068.6,519.4 1259.4,552.8 1352.5,617.5 1121.7,572.9" },
+  { nr: 12, status: "dostepna", powierzchnia: "1 000 m² (0,1000 ha)", wymiary: "26,3 × 38,0 m", cena: "75 000 zł", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "1121.7,572.9 1352.5,617.5 1460.2,692.4 1182,633.5" },
+  { nr: 13, status: "sprzedana", powierzchnia: "1 001 m² (0,1001 ha)", wymiary: "26,3 × 38,0 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "1182,633.5 1460.2,692.4 1587.9,781.1 1254.2,706.3" },
+  { nr: 14, status: "sprzedana", powierzchnia: "1 001 m² (0,1001 ha)", wymiary: "26,3 × 38,0 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "1254.2,706.3 1587.9,781.1 1727.1,877.9 1330.1,782.8" },
+  { nr: 15, status: "sprzedana", powierzchnia: "1 001 m² (0,1001 ha)", wymiary: "26,3 × 38,0 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "1330.1,782.8 1727.1,877.9 1878.7,983.4 1424.5,877.8" },
+  { nr: 16, status: "sprzedana", powierzchnia: "1 097 m² (0,1097 ha)", wymiary: "kształt nieregularny, boki 41,3 / 38,0 / 13,2 / 16,8 / 30,7 m", cena: "", inne: [["Obręb", "Gnojno, gm. Pułtusk"]], pts: "1424.5,877.8 1878.7,983.4 2195.3,1203.5 1522.1,976" }
+];
+const BRAK = "do uzupełnienia";
+const BRAK_CENA = "zapytaj o cenę";
+const EMAIL = "wyrzykowski@theestate.pl";   // na ten adres przychodzą zapytania
+const TEL = "530 270 080";
+/* ========================================================================= */
+
+const NS = "http://www.w3.org/2000/svg";
+const TOUCH = matchMedia("(hover:none)").matches;
+if (TOUCH) document.documentElement.classList.add("touch");
+const g = document.getElementById("dzialki");
+const tip = document.getElementById("tip");
+let active = null;
+
+function centroid(pts){
+  const p = pts.split(" ").map(s => s.split(",").map(Number));
+  let x=0,y=0; p.forEach(q => { x+=q[0]; y+=q[1]; }); return [x/p.length, y/p.length];
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function card(d){
+  const label = { dostepna:"Dostępna", rezerwacja:"Rezerwacja", sprzedana:"Sprzedana" }[d.status];
+  let h = `<h2>Działka nr ${d.nr} <span class="badge ${d.status}">${label}</span></h2>`;
+  if (d.status === "sprzedana") return h + `<div class="big sprzedana">SPRZEDANE</div>`;
+  if (d.status === "rezerwacja") h += `<div class="big rezerwacja">REZERWACJA</div>`;
+  const rows = [["Powierzchnia", d.powierzchnia], ["Wymiary", d.wymiary]].concat(d.inne || [], [["Prąd", "możliwość przyłączenia"], ["Zabudowa", "WZ – dom jednorodzinny"]]);
+  h += "<dl>" + rows.map(r => `<dt>${esc(r[0])}</dt><dd>${esc(r[1] || BRAK)}</dd>`).join("") + "</dl>";
+  h += `<div class="price"><span>Cena</span><strong>${esc(d.cena || BRAK_CENA)}</strong></div>`;
+  h += `<button type="button" class="ask" data-nr="${d.nr}">Zapytaj o tę działkę</button><div class="askhint">Kliknij działkę, aby wysłać zapytanie</div>`;
+  return h;
+}
+function place(e){
+  if (matchMedia("(max-width:700px)").matches) return;
+  const pad = 18, w = tip.offsetWidth, hgt = tip.offsetHeight;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+  if (y + hgt > innerHeight - 8) y = e.clientY - hgt - pad;
+  tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+}
+function show(d, el, e){
+  if (active && active !== el) active.classList.remove("on");
+  active = el; el.classList.add("on");
+  tip.innerHTML = card(d); tip.classList.add("show"); if (e) place(e);
+}
+function hide(){ if (active) active.classList.remove("on"); active = null; tip.classList.remove("show"); }
+
+DZIALKI.forEach(d => {
+  const poly = document.createElementNS(NS, "polygon");
+  poly.setAttribute("points", d.pts);
+  poly.setAttribute("class", "p " + d.status);
+  poly.setAttribute("tabindex", "0");
+  poly.setAttribute("aria-label", "Działka nr " + d.nr);
+  poly.addEventListener("mouseenter", e => show(d, poly, e));
+  poly.addEventListener("mousemove", place);
+  poly.addEventListener("mouseleave", hide);
+  poly.addEventListener("focus", () => { show(d, poly); const r = poly.getBoundingClientRect(); place({clientX:r.right, clientY:r.top}); });
+  poly.addEventListener("blur", hide);
+  poly.addEventListener("click", e => {
+    e.stopPropagation();
+    if (!TOUCH && d.status !== "sprzedana") { openForm(d); return; }
+    show(d, poly, e);
+  });
+  g.appendChild(poly);
+  const [cx, cy] = centroid(d.pts);
+  const t = document.createElementNS(NS, "text");
+  t.setAttribute("x", cx); t.setAttribute("y", cy); t.setAttribute("class", "nr"); t.textContent = d.nr;
+  g.appendChild(t);
+});
+document.addEventListener("click", e => { if (!tip.contains(e.target)) hide(); });
+tip.addEventListener("click", e => {
+  const b = e.target.closest(".ask"); if (!b) return;
+  e.stopPropagation(); openForm(DZIALKI.find(x => x.nr == b.dataset.nr));
+});
+
+const n = s => DZIALKI.filter(d => d.status === s).length;
+document.getElementById("cFree").textContent = n("dostepna");
+document.getElementById("cRes").textContent = n("rezerwacja");
+document.getElementById("cSold").textContent = n("sprzedana");
+
+/* ===== formularz zapytania ===== */
+const modal = document.getElementById("modal"), form = document.getElementById("form"), out = document.getElementById("fOut");
+let current = null;
+function openForm(d){
+  hide(); current = d || null; out.textContent = ""; out.className = "msg";
+  const sum = document.getElementById("fSum");
+  if (d) {
+    sum.textContent = `Działka nr ${d.nr} · ${d.powierzchnia} · ${d.wymiary} · cena: ${d.cena || BRAK_CENA}` + (d.status === "rezerwacja" ? " · obecnie w rezerwacji" : "");
+    form.wiadomosc.value = `Dzień dobry, jestem zainteresowany/a działką nr ${d.nr}. Proszę o kontakt.`;
+  } else {
+    sum.textContent = "Działki w obrębie Gnojno, gm. Pułtusk. Napisz, która działka Cię interesuje.";
+    form.wiadomosc.value = "";
+  }
+  modal.classList.add("open"); setTimeout(() => form.imie.focus(), 50);
+}
+function closeForm(){ modal.classList.remove("open"); }
+document.getElementById("askAll").addEventListener("click", e => { e.stopPropagation(); openForm(null); });
+document.getElementById("fCancel").addEventListener("click", closeForm);
+modal.addEventListener("click", e => { if (e.target === modal) closeForm(); });
+addEventListener("keydown", e => { if (e.key === "Escape") closeForm(); });
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!form.imie.value.trim() || !form.telefon.value.trim()) { out.className = "msg err"; out.textContent = "Podaj imię i telefon."; return; }
+  if (!document.getElementById("fZgoda").checked) { out.className = "msg err"; out.textContent = "Zaznacz zgodę na kontakt."; return; }
+  if (form._honey.value) return;
+  const d = current;
+  const dane = {
+    _subject: "Zapytanie o działkę" + (d ? " nr " + d.nr : "") + " – " + form.imie.value.trim(),
+    _template: "table", _captcha: "false",
+    "Działka": d ? `nr ${d.nr}` : "ogólne",
+    "Status": d ? d.status : "", "Powierzchnia": d ? d.powierzchnia : "", "Cena": d ? (d.cena || BRAK_CENA) : "",
+    "Imię i nazwisko": form.imie.value.trim(), "Telefon": form.telefon.value.trim(), "E-mail": form.email.value.trim(),
+    "Wiadomość": form.wiadomosc.value.trim(), "Zgoda na kontakt": "tak",
+    "Wysłano": new Date().toLocaleString("pl-PL"), "Strona": location.href
+  };
+  if (form.email.value.trim()) dane._replyto = form.email.value.trim();
+  const btn = document.getElementById("fSend"); btn.disabled = true; out.className = "msg"; out.textContent = "Wysyłanie…";
+  try {
+    const r = await fetch("https://formsubmit.co/ajax/" + EMAIL, { method:"POST",
+      headers:{ "Content-Type":"application/json", "Accept":"application/json" }, body: JSON.stringify(dane) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.success === "false" || j.success === false) throw new Error(j.message || r.status);
+    out.className = "msg ok"; out.textContent = "Dziękujemy! Zapytanie zostało wysłane. Oddzwonimy wkrótce.";
+    form.reset(); setTimeout(closeForm, 2500);
+  } catch (err) {
+    // zapas: otwórz program pocztowy z gotową wiadomością
+    const body = Object.entries(dane).filter(([k]) => !k.startsWith("_")).map(([k, v]) => `${k}: ${v}`).join("\n");
+    location.href = `mailto:${EMAIL}?subject=${encodeURIComponent(dane._subject)}&body=${encodeURIComponent(body)}`;
+    out.className = "msg err"; out.textContent = `Nie udało się wysłać automatycznie. Otworzyłem program pocztowy z gotową wiadomością. Możesz też zadzwonić: ${TEL}.`;
+  } finally { btn.disabled = false; }
+});
+
+const wzModal = document.getElementById("wzModal");
+document.getElementById("wzBtn").addEventListener("click", e => { e.stopPropagation(); hide(); wzModal.classList.add("open"); });
+document.getElementById("wzClose").addEventListener("click", () => wzModal.classList.remove("open"));
+document.getElementById("wzAsk").addEventListener("click", () => { wzModal.classList.remove("open"); openForm(null); });
+wzModal.addEventListener("click", e => { if (e.target === wzModal) wzModal.classList.remove("open"); });
+addEventListener("keydown", e => { if (e.key === "Escape") wzModal.classList.remove("open"); });
+
+/* na pionowym ekranie pokaż całe zdjęcie zamiast przycinać */
+const svg = document.getElementById("mapa");
+function fit(){
+  const narrow = innerWidth / innerHeight < 1.2;
+  svg.setAttribute("viewBox", narrow ? "690 300 1310 825" : "0 0 2000 1125");
+  svg.setAttribute("preserveAspectRatio", narrow ? "xMidYMid meet" : "xMaxYMid slice");
+}
+if (matchMedia("(hover:none)").matches) document.querySelector(".legend .sub").textContent = "Dotknij działkę, aby zobaczyć szczegóły.";
+addEventListener("resize", fit); fit();
+</script>
+</body>
+</html>
